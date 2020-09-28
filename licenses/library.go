@@ -169,6 +169,36 @@ func (l *Library) String() string {
 	return l.Name()
 }
 
+type stringReplace struct {
+	start string
+	match string
+}
+
+// what I should really do is use vanity url replacement
+// curl -i https://k8s.io/api?go-get=1
+
+var (
+	replacements = []struct {
+		start   string
+		replace string
+	}{
+		{"google.golang.org/grpc", "github.com/grpc/grpc-go"},
+		{"google.golang.org/genproto", "github.com/googleapis/go-genproto"},
+		{"golang.org/x", "github.com/golang"},
+		{"gopkg.in/yaml.v2", "github.com/go-yaml/yaml"},
+		{"k8s.io", "github.com/kubernetes"},
+	}
+)
+
+func nameFixup(path string) string {
+	for _, replace := range replacements {
+		if strings.HasPrefix(path, replace.start) {
+			return strings.Replace(path, replace.start, replace.replace, 1)
+		}
+	}
+	return path
+}
+
 // FileURL attempts to determine the URL for a file in this library.
 // This only works for certain supported package prefixes, such as github.com,
 // bitbucket.org and googlesource.com. Prefer GitRepo.FileURL() if possible.
@@ -177,11 +207,13 @@ func (l *Library) FileURL(filePath string) (*url.URL, error) {
 	if err != nil {
 		return nil, err
 	}
-	nameParts := strings.SplitN(l.Name(), "/", 4)
+	nameParts := strings.SplitN(nameFixup(l.Name()), "/", 4)
 	if len(nameParts) < 3 {
 		return nil, fmt.Errorf("cannot determine URL for %q package", l.Name())
 	}
+
 	host, user, project := nameParts[0], nameParts[1], nameParts[2]
+
 	pathPrefix, ok := repoPathPrefixes[host]
 	if !ok {
 		return nil, fmt.Errorf("unsupported package host %q for %q", host, l.Name())
